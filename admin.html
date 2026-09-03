@@ -29,6 +29,7 @@
   .row.dragging { opacity: 0.4; }
   .row.over { border-color: #4a7bb5; }
   .hint { opacity: 0.35; font-size: 0.8rem; margin-bottom: 8px; }
+  .runtime { opacity: 0.55; font-size: 0.8rem; margin-bottom: 10px; }
 </style>
 </head>
 <body>
@@ -64,6 +65,8 @@
   const ytLink = (it) => it.type === "playlist"
     ? `https://youtube.com/playlist?list=${it.id}`
     : `https://youtube.com/watch?v=${it.id}`;
+  const videoLink = (id) => `https://youtube.com/watch?v=${id}`;
+  const fmtDur = (s) => { s = Math.round(s||0); const m = Math.floor(s/60); const ss = String(s%60).padStart(2,"0"); return m + ":" + ss; };
 
   async function loadAll() {
     const [sres, ares] = await Promise.all([
@@ -104,6 +107,11 @@
     const el = document.getElementById("active");
     if (!list.length) { el.innerHTML = '<div class="empty">Rotation is empty.</div>'; return; }
     el.innerHTML = "";
+    const totalSec = list.reduce((a,b)=>a+(b.seconds||0),0);
+    const hdr = document.createElement("div");
+    hdr.className = "runtime";
+    hdr.textContent = `${list.length} track(s) · total loop ${fmtDur(totalSec)}`;
+    el.appendChild(hdr);
     for (const it of list) {
       const div = document.createElement("div");
       div.className = "row";
@@ -111,10 +119,10 @@
       div.dataset.key = it.key;
       div.innerHTML = `
         <span class="grip" title="Drag to reorder">⠿</span>
-        <span class="tag">${it.type}</span>
+        <span class="tag">${fmtDur(it.seconds)}</span>
         <div class="main">
           <b>${it.name || "(no label)"}</b>
-          <small><a class="linkout" target="_blank" href="${ytLink(it)}">${ytLink(it)}</a></small>
+          <small><a class="linkout" target="_blank" href="${videoLink(it.id)}">${videoLink(it.id)}</a></small>
         </div>
         <button class="act no">Remove</button>`;
       div.querySelector(".no").onclick = async () => { await post("/api/manage", { action: "remove", key: it.key }); loadAll(); };
@@ -147,8 +155,12 @@
   document.getElementById("addbtn").onclick = async () => {
     const url = document.getElementById("addurl").value.trim();
     if (!url) return;
+    const btn = document.getElementById("addbtn");
+    btn.textContent = "Adding…"; btn.disabled = true;
     const d = await post("/api/manage", { action: "add", url, name: document.getElementById("addname").value });
+    btn.textContent = "Add"; btn.disabled = false;
     if (d.error) { alert(d.error); return; }
+    if (typeof d.added === "number" && d.total > 1) alert(`Added ${d.added} of ${d.total} track(s) from that playlist.`);
     document.getElementById("addurl").value = "";
     document.getElementById("addname").value = "";
     loadAll();

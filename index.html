@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hidrocibalae R&D Radio</title>
+<title>Hidrocibalae — House Radio</title>
 <style>
   :root {
     --bg1: #0a0e10;
@@ -54,6 +54,8 @@
   .controls button:hover { background: rgba(86,195,187,0.14); border-color: var(--teal-dim); }
   .controls .play { width: 54px; height: 54px; background: var(--teal); border-color: var(--teal); color: #04110f; font-size: 18px; }
   .controls .play:hover { background: #6ad2ca; }
+  .controls #resync { width: auto; padding: 0 16px; border-radius: 22px; font-size: 11px; letter-spacing: 0.18em; color: var(--teal); gap: 6px; }
+  .controls #mute { width: 38px; height: 38px; font-size: 13px; }
   .vol { display: flex; align-items: center; gap: 8px; margin-left: 6px; }
   .vol input { width: 110px; accent-color: var(--teal); }
   .footer { margin-top: 34px; font-size: 11px; letter-spacing: 0.28em; color: var(--muted); }
@@ -65,11 +67,33 @@
   .hidden { display: none !important; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-  @media (max-width: 780px) {
-    .stage { grid-template-columns: 1fr; grid-template-rows: auto auto; gap: 3vh; padding: 4vh 8vw; text-align: left; }
-    .platter { width: min(58vw, 40vh); }
-    .panel { padding-right: 0; }
+  @media (max-width: 820px) {
     body { overflow: auto; }
+    .stage {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto;
+      align-content: start;
+      gap: 4vh;
+      padding: 6vh 7vw 8vh;
+      min-height: 100%;
+    }
+    .deck { padding-top: 2vh; }
+    .platter { width: min(74vw, 340px); }
+    /* Tonearm is decorative on the big desktop deck; hide on narrow screens
+       where it would clip the record. */
+    .tonearm { display: none; }
+    .panel { padding-right: 0; }
+    .station { font-size: clamp(40px, 12vw, 60px); }
+    .eq { height: 54px; margin: 24px 0 12px; }
+    .controls { flex-wrap: wrap; gap: 12px; }
+    .vol { margin-left: 0; }
+    .vol input { width: 46vw; max-width: 200px; }
+    .footer { margin-top: 26px; line-height: 1.8; }
+  }
+  @media (max-width: 400px) {
+    .controls .play { width: 60px; height: 60px; }
+    .controls button { width: 48px; height: 48px; }
+    .controls #resync { height: 40px; }
   }
   @media (prefers-reduced-motion: reduce) { .vinyl, .vinyl.playing { animation: none; } }
 </style>
@@ -100,16 +124,14 @@
     <div class="panel">
       <div class="onair"><span class="dot"></span> ON AIR</div>
       <div class="station">Hidrocibalae</div>
-      <div class="subtitle">R&D RADIO &nbsp;|&nbsp; <b>24 / 7</b></div>
+      <div class="subtitle">HOUSE RADIO &nbsp;|&nbsp; <b>24 / 7</b></div>
       <div class="eq" id="eq"></div>
       <div class="nowtitle" id="nowtitle">Press play to tune in.</div>
       <div class="controls">
-        <button class="play" id="play" title="Play/Pause">▶</button>
-        <button id="prev" title="Previous">⏮</button>
-        <button id="next" title="Next">⏭</button>
-        <button id="reload" title="Reload list">⟳</button>
+        <button class="play" id="play" title="Play / Pause">▶</button>
+        <button id="resync" title="Re-sync to live">⟳ LIVE</button>
         <div class="vol">
-          <button id="mute" title="Mute" style="width:38px;height:38px;font-size:13px;">🔊</button>
+          <button id="mute" title="Mute">🔊</button>
           <input id="vol" type="range" min="0" max="100" value="70">
         </div>
       </div>
@@ -139,42 +161,109 @@
     requestAnimationFrame(animateEq);
   }
   animateEq();
-  async function fetchList() { try { const r = await fetch("/api/list"); const d = await r.json(); items = d.items || []; } catch { items = []; } }
+  // ---- Synced radio engine ----
+  // The backend gives us the full track timeline + its own clock. We compute
+  // the shared position as (now - epoch) mod total, so every listener lands on
+  // the same track at the same offset. clockSkew corrects our local clock.
+  let timeline = { items: [], total: 0, epoch: 0 };
+  let clockSkew = 0; // serverNow - localNow (seconds)
+
+  async function fetchList() {
+    try {
+      const r = await fetch("/api/list");
+      const d = await r.json();
+      timeline = { items: d.items || [], total: d.total || 0, epoch: d.epoch || 0 };
+      items = timeline.items;
+      if (typeof d.serverNow === "number") clockSkew = d.serverNow - (Date.now() / 1000);
+    } catch { items = []; timeline = { items: [], total: 0, epoch: 0 }; }
+  }
+
+  function serverSeconds() { return (Date.now() / 1000) + clockSkew; }
+
+  // Where should the station be right now? Returns { index, offset } or null.
+  function livePosition() {
+    if (!timeline.items.length || timeline.total <= 0) return null;
+    let pos = (serverSeconds() - timeline.epoch) % timeline.total;
+    if (pos < 0) pos += timeline.total;
+    for (let i = 0; i < timeline.items.length; i++) {
+      const dur = timeline.items[i].seconds || 0;
+      if (pos < dur) return { index: i, offset: pos };
+      pos -= dur;
+    }
+    return { index: timeline.items.length - 1, offset: 0 };
+  }
+
   const tag = document.createElement("script"); tag.src = "https://www.youtube.com/iframe_api"; document.head.appendChild(tag);
   window.onYouTubeIframeAPIReady = () => {
     player = new YT.Player("player", { height: "120", width: "200", playerVars: { autoplay: 0, controls: 0, rel: 0 }, events: { onReady: () => { ready = true; }, onStateChange } });
   };
-  function loadCurrent() {
-    if (!items.length || !ready) return;
-    const it = items[idx % items.length];
-    if (it.type === "playlist") player.loadPlaylist({ list: it.id, listType: "playlist" });
-    else player.loadVideoById(it.id);
+
+  // Load whatever is live now and seek into it.
+  function goLive(autoplay) {
+    const p = livePosition();
+    if (!p || !ready) return;
+    idx = p.index;
+    const it = timeline.items[idx];
+    player.loadVideoById({ videoId: it.id, startSeconds: Math.floor(p.offset) });
+    if (!autoplay) { /* loadVideoById autoplays; caller pauses if needed */ }
     setTimeout(updateTitle, 900);
   }
+
+  // Drift correction: if our playback wanders from the shared position by more
+  // than a few seconds (tab throttling, buffering), snap back quietly.
+  function driftCheck() {
+    if (!ready || !playing) return;
+    const p = livePosition();
+    if (!p) return;
+    if (p.index !== idx) { goLive(true); return; }
+    try {
+      const local = player.getCurrentTime();
+      if (Math.abs(local - p.offset) > 4) player.seekTo(p.offset, true);
+    } catch {}
+  }
+  setInterval(driftCheck, 5000);
+
   function setPlaying(on) {
     playing = on;
     document.getElementById("vinyl").classList.toggle("playing", on);
     document.getElementById("tonearm").classList.toggle("off", !on);
-    document.getElementById("play").textContent = on ? "❚❚" : "▶";
+    document.getElementById("play").textContent = on ? "\u275a\u275a" : "\u25b6";
   }
+
   function onStateChange(e) {
     if (e.data === YT.PlayerState.PLAYING) { setPlaying(true); updateTitle(); }
     else if (e.data === YT.PlayerState.PAUSED) setPlaying(false);
-    else if (e.data === YT.PlayerState.ENDED) { if (items.length) { idx = (idx + 1) % items.length; loadCurrent(); } }
+    else if (e.data === YT.PlayerState.ENDED) { goLive(true); } // next track = whatever's live
   }
-  function updateTitle() { try { const d = player.getVideoData(); if (d && d.title) document.getElementById("nowtitle").innerHTML = "<b>" + d.title + "</b>"; } catch {} }
+
+  function updateTitle() {
+    try {
+      const d = player.getVideoData();
+      if (d && d.title) document.getElementById("nowtitle").innerHTML = "<b>" + d.title + "</b>";
+    } catch {}
+  }
   setInterval(() => { if (ready && playing) updateTitle(); }, 3000);
-  document.getElementById("play").onclick = () => { if (!ready) return; if (playing) player.pauseVideo(); else { if (!player.getVideoData().video_id) loadCurrent(); player.playVideo(); } };
-  document.getElementById("next").onclick = () => { if (items.length) { idx = (idx + 1) % items.length; loadCurrent(); } };
-  document.getElementById("prev").onclick = () => { if (items.length) { idx = (idx - 1 + items.length) % items.length; loadCurrent(); } };
-  document.getElementById("reload").onclick = async () => { await fetchList(); loadCurrent(); };
+
+  // Controls
+  document.getElementById("play").onclick = () => {
+    if (!ready) return;
+    if (playing) player.pauseVideo();
+    else { goLive(true); } // resuming rejoins the live position, not where you paused
+  };
+  document.getElementById("resync").onclick = async () => { await fetchList(); goLive(true); };
   document.getElementById("vol").oninput = (e) => { if (player) { player.unMute(); player.setVolume(+e.target.value); } };
-  document.getElementById("mute").onclick = () => { if (!player) return; const b = document.getElementById("mute"); if (player.isMuted()) { player.unMute(); b.textContent = "🔊"; } else { player.mute(); b.textContent = "🔇"; } };
+  document.getElementById("mute").onclick = () => {
+    if (!player) return;
+    const b = document.getElementById("mute");
+    if (player.isMuted()) { player.unMute(); b.textContent = "\ud83d\udd0a"; }
+    else { player.mute(); b.textContent = "\ud83d\udd07"; }
+  };
+
   document.getElementById("overlay").onclick = async () => {
     await fetchList();
-    if (!items.length) { document.getElementById("nowtitle").textContent = "Nothing in rotation yet — add something in admin."; }
+    if (!items.length) { document.getElementById("nowtitle").textContent = "Nothing in rotation yet \u2014 add something in admin."; }
     document.getElementById("overlay").classList.add("hidden");
-    if (ready && items.length) { player.setVolume(+document.getElementById("vol").value); idx = 0; loadCurrent(); player.playVideo(); }
+    if (ready && items.length) { player.setVolume(+document.getElementById("vol").value); goLive(true); }
   };
 </script>
 </body>
