@@ -141,6 +141,8 @@
   <div class="start-overlay" id="overlay"><div class="btn">▶ &nbsp;TUNE IN</div></div>
 <script>
   let player, items = [], idx = 0, ready = false, playing = false;
+  let lastLoadAt = 0, loadedIndex = -1, userPaused = false;
+  const STARTUP_GRACE_MS = 6000;
   const eq = document.getElementById("eq");
   const BAR_COUNT = 28; const bars = []; const phases = [];
   for (let i = 0; i < BAR_COUNT; i++) { const s = document.createElement("span"); eq.appendChild(s); bars.push(s); phases.push(Math.random() * Math.PI * 2); }
@@ -199,26 +201,34 @@
   };
 
   // Load whatever is live now and seek into it.
-  function goLive(autoplay) {
+  function goLive() {
     const p = livePosition();
     if (!p || !ready) return;
     idx = p.index;
+    loadedIndex = p.index;
+    lastLoadAt = Date.now();
     const it = timeline.items[idx];
     player.loadVideoById({ videoId: it.id, startSeconds: Math.floor(p.offset) });
-    if (!autoplay) { /* loadVideoById autoplays; caller pauses if needed */ }
     setTimeout(updateTitle, 900);
   }
 
-  // Drift correction: if our playback wanders from the shared position by more
-  // than a few seconds (tab throttling, buffering), snap back quietly.
+  // Drift correction: nudge playback back toward the shared position.
+  // Mobile players start slowly, so we (1) never touch a track that was just
+  // loaded (grace window), (2) prefer seekTo over a full reload, and (3) only
+  // reload when the live track is genuinely different AND we're past startup.
+  // This stops the "plays a split second then pauses" reload loop on Android.
   function driftCheck() {
     if (!ready || !playing) return;
+    // Give a freshly loaded track time to actually begin before judging drift.
+    if (Date.now() - lastLoadAt < STARTUP_GRACE_MS) return;
     const p = livePosition();
     if (!p) return;
-    if (p.index !== idx) { goLive(true); return; }
+    // The live track has rolled over to a different song — reload to catch it.
+    if (p.index !== loadedIndex) { goLive(); return; }
+    // Same track, just correct position without reloading.
     try {
       const local = player.getCurrentTime();
-      if (Math.abs(local - p.offset) > 4) player.seekTo(p.offset, true);
+      if (Math.abs(local - p.offset) > 6) player.seekTo(p.offset, true);
     } catch {}
   }
   setInterval(driftCheck, 5000);
@@ -232,8 +242,17 @@
 
   function onStateChange(e) {
     if (e.data === YT.PlayerState.PLAYING) { setPlaying(true); updateTitle(); }
-    else if (e.data === YT.PlayerState.PAUSED) setPlaying(false);
-    else if (e.data === YT.PlayerState.ENDED) { goLive(true); } // next track = whatever's live
+    else if (e.data === YT.PlayerState.PAUSED) {
+      // Mobile browsers (incl. Vivaldi Android) often fire a transient PAUSED
+      // right after a video loads. If the user didn't press pause and we're
+      // still in the startup window, resume automatically instead of stopping.
+      if (!userPaused && Date.now() - lastLoadAt < STARTUP_GRACE_MS) {
+        try { player.playVideo(); } catch {}
+        return;
+      }
+      setPlaying(false);
+    }
+    else if (e.data === YT.PlayerState.ENDED) { goLive(); } // next track = whatever's live
   }
 
   function updateTitle() {
@@ -247,10 +266,10 @@
   // Controls
   document.getElementById("play").onclick = () => {
     if (!ready) return;
-    if (playing) player.pauseVideo();
-    else { goLive(true); } // resuming rejoins the live position, not where you paused
+    if (playing) { userPaused = true; player.pauseVideo(); }
+    else { userPaused = false; goLive(); } // resuming rejoins the live position, not where you paused
   };
-  document.getElementById("resync").onclick = async () => { await fetchList(); goLive(true); };
+  document.getElementById("resync").onclick = async () => { userPaused = false; await fetchList(); goLive(); };
   document.getElementById("vol").oninput = (e) => { if (player) { player.unMute(); player.setVolume(+e.target.value); } };
   document.getElementById("mute").onclick = () => {
     if (!player) return;
@@ -263,7 +282,7 @@
     await fetchList();
     if (!items.length) { document.getElementById("nowtitle").textContent = "Nothing in rotation yet \u2014 add something in admin."; }
     document.getElementById("overlay").classList.add("hidden");
-    if (ready && items.length) { player.setVolume(+document.getElementById("vol").value); goLive(true); }
+    if (ready && items.length) { userPaused = false; player.setVolume(+document.getElementById("vol").value); goLive(); }
   };
 </script>
 </body>
