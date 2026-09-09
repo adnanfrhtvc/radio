@@ -1,6 +1,23 @@
+# Netlify configuration.
+# Static assets are served from public/; serverless functions live under
+# netlify/functions/ and are exposed at /api/* via each function's config.path.
+
 [build]
-  publish = "."
+  publish = "public"
   functions = "netlify/functions"
 
 [functions]
   node_bundler = "esbuild"
+  # Ensure the shared modules (imported via relative path) are bundled in.
+  included_files = ["public/shared/**"]
+
+# Pretty URLs: /admin and /suggest resolve to their .html files.
+[[redirects]]
+  from = "/admin"
+  to = "/admin.html"
+  status = 200
+
+[[redirects]]
+  from = "/suggest"
+  to = "/suggest.html"
+  status = 200

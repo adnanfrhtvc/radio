@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hidrocibalae — House Radio</title>
+<link rel="stylesheet" href="/css/index.css">
+</head>
+<body>
+  <div id="hidden-player"><div id="player"></div></div>
+  <div class="stage">
+    <div class="deck">
+      <div class="platter">
+        <div class="vinyl" id="vinyl">
+          <div class="label">
+            <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Hidrocibalae">
+              <circle cx="32" cy="32" r="30" fill="#3aa8a0"/>
+              <path d="M14 24 C24 18, 40 18, 50 24" stroke="#f2f8f7" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+              <path d="M13 34 C24 40, 40 40, 51 34" stroke="#f2f8f7" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+              <path d="M22 15 C18 28, 18 40, 26 51" stroke="#f2f8f7" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+              <path d="M42 13 C48 26, 46 40, 40 50" stroke="#f2f8f7" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+            </svg>
+            <div class="brand">HIDROCIBALAE</div>
+          </div>
+          <div class="spindle"></div>
+        </div>
+        <div class="tonearm off" id="tonearm">
+          <div class="pivot"></div><div class="arm"></div><div class="head"></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="onair"><span class="dot"></span> ON AIR</div>
+      <div class="station">Hidrocibalae</div>
+      <div class="subtitle">HOUSE RADIO &nbsp;|&nbsp; <b>24 / 7</b></div>
+      <div class="eq" id="eq"></div>
+      <div class="nowtitle" id="nowtitle">Press play to tune in.</div>
+      <div class="controls">
+        <button class="play" id="play" title="Play / Pause">▶</button>
+        <button id="resync" title="Re-sync to live">⟳ LIVE</button>
+        <div class="vol">
+          <button id="mute" title="Mute">🔊</button>
+          <input id="vol" type="range" min="0" max="100" value="70">
+        </div>
+      </div>
+      <div class="footer">33 ⅓ RPM · STEREO &nbsp;·&nbsp; <a href="/suggest">SUGGEST A TRACK →</a></div>
+    </div>
+  </div>
+  <div class="start-overlay" id="overlay"><div class="btn">▶ &nbsp;TUNE IN</div></div>
+<script type="module" src="/js/index.js"></script>
+</body>
+</html>

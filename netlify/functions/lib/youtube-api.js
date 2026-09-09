@@ -1,4 +1,13 @@
-// YouTube Data API v3 helpers. Requires process.env.YOUTUBE_API_KEY.
+// YouTube Data API service (server-only — needs the secret YOUTUBE_API_KEY).
+//
+// Responsibilities:
+//   - report whether a key is configured
+//   - fetch video durations + titles
+//   - expand a playlist into its videos
+//   - turn a parsed { type, id } into concrete track objects
+//
+// Pure URL/ID parsing lives in shared/youtube-url.js instead, so the browser
+// can reuse it without ever seeing the API key.
 
 const KEY = () => process.env.YOUTUBE_API_KEY;
 
@@ -14,8 +23,8 @@ export function isoToSeconds(iso) {
   return h * 3600 + min * 60 + s;
 }
 
-// Fetch durations + titles for up to 50 video IDs at a time.
-// Returns Map(id -> { seconds, title }). Skips unplayable/embed-blocked where detectable.
+// Fetch durations + titles for up to 50 video IDs per request.
+// Returns Map(id -> { seconds, title, embeddable }).
 export async function fetchVideoMeta(ids) {
   const out = new Map();
   for (let i = 0; i < ids.length; i += 50) {
@@ -25,12 +34,10 @@ export async function fetchVideoMeta(ids) {
     if (!r.ok) throw new Error(`YouTube videos API ${r.status}`);
     const data = await r.json();
     for (const item of data.items || []) {
-      const seconds = isoToSeconds(item.contentDetails?.duration);
-      const embeddable = item.status?.embeddable !== false;
       out.set(item.id, {
-        seconds,
+        seconds: isoToSeconds(item.contentDetails?.duration),
         title: item.snippet?.title || "",
-        embeddable,
+        embeddable: item.status?.embeddable !== false,
       });
     }
   }
@@ -55,8 +62,8 @@ export async function fetchPlaylistVideoIds(playlistId, cap = 200) {
   return ids.slice(0, cap);
 }
 
-// Given a parsed {type,id}, return an array of track objects:
-// [{ id, name, seconds }]. Playlists are expanded into individual videos.
+// Turn a parsed { type, id } into concrete tracks [{ id, name, seconds }].
+// Playlists are expanded into their individual, embeddable videos.
 export async function expandToTracks(parsed, fallbackName = "") {
   if (parsed.type === "video") {
     const meta = await fetchVideoMeta([parsed.id]);
@@ -64,10 +71,11 @@ export async function expandToTracks(parsed, fallbackName = "") {
     if (!m || m.seconds === 0) throw new Error("Video not found or has no duration.");
     return [{ id: parsed.id, name: fallbackName || m.title, seconds: m.seconds }];
   }
-  // playlist
+
   const vids = await fetchPlaylistVideoIds(parsed.id);
   if (!vids.length) throw new Error("Playlist is empty or private.");
   const meta = await fetchVideoMeta(vids);
+
   const tracks = [];
   for (const vid of vids) {
     const m = meta.get(vid);

@@ -1,0 +1,25 @@
+* { box-sizing: border-box; }
+body { background: #0a0a0a; color: #fff; font-family: system-ui, sans-serif; max-width: 760px; margin: 0 auto; padding: 32px 20px 80px; }
+h1 { font-size: 1.3rem; } h2 { font-size: 1rem; margin: 28px 0 10px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.08em; }
+input, button { font-family: inherit; font-size: 0.95rem; }
+.row { display: flex; gap: 8px; align-items: center; background: #141414; border: 1px solid #262626; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; }
+.row .main { flex: 1; min-width: 0; }
+.row .main b { display: block; }
+.row .main small { opacity: 0.5; word-break: break-all; }
+.tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; background: #262626; }
+button.act { background: #1f1f1f; color: #fff; border: 1px solid #333; border-radius: 8px; padding: 8px 12px; cursor: pointer; white-space: nowrap; }
+button.ok { border-color: #2f6b45; } button.ok:hover { background: #17351f; }
+button.no { border-color: #6b2f2f; } button.no:hover { background: #351717; }
+input { background: #161616; color: #fff; border: 1px solid #2c2c2c; border-radius: 8px; padding: 10px; }
+#gate { max-width: 340px; margin: 80px auto; text-align: center; }
+#gate input { width: 100%; margin: 12px 0; }
+#gate button { width: 100%; background: #fff; color: #000; border: 0; border-radius: 8px; padding: 12px; font-weight: 600; cursor: pointer; }
+#add { display: flex; gap: 8px; margin-bottom: 8px; }
+#add input { flex: 1; }
+.empty { opacity: 0.4; padding: 8px 0; }
+a.linkout { color: #7db9ff; font-size: 0.8rem; }
+.grip { cursor: grab; opacity: 0.4; padding: 0 4px; user-select: none; font-size: 1.1rem; }
+.row.dragging { opacity: 0.4; }
+.row.over { border-color: #4a7bb5; }
+.hint { opacity: 0.35; font-size: 0.8rem; margin-bottom: 8px; }
+.runtime { opacity: 0.55; font-size: 0.8rem; margin-bottom: 10px; }
