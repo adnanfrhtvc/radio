@@ -1,8 +1,22 @@
-import { livePosition as sharedLivePosition } from "/shared/timeline.js";
+// Player — server-driven synced radio.
+//
+// The server (/api/state) is authoritative: it says what's playing and how many
+// seconds in. The player loads that video at that offset, then polls to catch
+// track changes (from natural rollover, an admin skip, or a vote-skip). Local
+// playback is corrected toward the server offset, with a startup grace window
+// and auto-resume so mobile players (which start slowly and fire spurious
+// pauses) don't stall.
 
-let player, items = [], idx = 0, ready = false, playing = false;
-let lastLoadAt = 0, loadedIndex = -1, userPaused = false;
+let player, ready = false, playing = false, userPaused = false;
+let lastLoadAt = 0, loadedId = null;
 const STARTUP_GRACE_MS = 6000;
+const POLL_MS = 4000;
+
+// Current server view: { nowPlaying:{id,name,seconds}, offset, serverNow, poolSize }
+let view = { nowPlaying: null, offset: 0, serverNow: 0, poolSize: 0 };
+let clockSkew = 0; // serverNow - localNow (seconds), to project offset forward
+
+// ---- Equalizer (unchanged visual) ----
 const eq = document.getElementById("eq");
 const BAR_COUNT = 28; const bars = []; const phases = [];
 for (let i = 0; i < BAR_COUNT; i++) { const s = document.createElement("span"); eq.appendChild(s); bars.push(s); phases.push(Math.random() * Math.PI * 2); }
@@ -23,68 +37,86 @@ function animateEq() {
   requestAnimationFrame(animateEq);
 }
 animateEq();
-// ---- Synced radio engine ----
-// The backend gives us the full track timeline + its own clock. We compute
-// the shared position as (now - epoch) mod total, so every listener lands on
-// the same track at the same offset. clockSkew corrects our local clock.
-let timeline = { items: [], total: 0, epoch: 0 };
-let clockSkew = 0; // serverNow - localNow (seconds)
 
-async function fetchList() {
+// ---- Server state ----
+async function fetchState() {
   try {
-    const r = await fetch("/api/list");
+    const r = await fetch("/api/state");
     const d = await r.json();
-    timeline = { items: d.items || [], total: d.total || 0, epoch: d.epoch || 0 };
-    items = timeline.items;
+    view = d;
     if (typeof d.serverNow === "number") clockSkew = d.serverNow - (Date.now() / 1000);
-  } catch { items = []; timeline = { items: [], total: 0, epoch: 0 }; }
+    return d;
+  } catch {
+    view = { nowPlaying: null, offset: 0, serverNow: 0, poolSize: 0 };
+    return view;
+  }
 }
 
-function serverSeconds() { return (Date.now() / 1000) + clockSkew; }
-
-// Where should the station be right now? Delegates to the shared timeline
-// module so the client and server never disagree on the math.
-function livePosition() {
-  return sharedLivePosition(timeline.items, serverSeconds(), timeline.epoch);
+// Project the current server-side offset for nowPlaying, accounting for the
+// time elapsed since we fetched (using the skew-corrected clock).
+function liveOffset() {
+  if (!view.nowPlaying) return 0;
+  const serverNow = (Date.now() / 1000) + clockSkew;
+  const elapsedSinceStart = serverNow - (view.serverNow - view.offset);
+  return Math.max(0, elapsedSinceStart);
 }
 
+// ---- YouTube player ----
 const tag = document.createElement("script"); tag.src = "https://www.youtube.com/iframe_api"; document.head.appendChild(tag);
 window.onYouTubeIframeAPIReady = () => {
-  player = new YT.Player("player", { height: "120", width: "200", playerVars: { autoplay: 0, controls: 0, rel: 0 }, events: { onReady: () => { ready = true; }, onStateChange } });
+  player = new YT.Player("player", {
+    height: "120", width: "200",
+    playerVars: { autoplay: 0, controls: 0, rel: 0 },
+    events: { onReady: () => { ready = true; }, onStateChange }
+  });
 };
 
-// Load whatever is live now and seek into it.
+// Load whatever the server says is live, seeking to the right offset.
 function goLive() {
-  const p = livePosition();
-  if (!p || !ready) return;
-  idx = p.index;
-  loadedIndex = p.index;
+  if (!ready || !view.nowPlaying) return;
+  const it = view.nowPlaying;
+  loadedId = it.id;
   lastLoadAt = Date.now();
-  const it = timeline.items[idx];
-  player.loadVideoById({ videoId: it.id, startSeconds: Math.floor(p.offset) });
-  setTimeout(updateTitle, 900);
+  player.loadVideoById({ videoId: it.id, startSeconds: Math.floor(liveOffset()) });
+  setTitle(it.name);
+  setTimeout(updateTitleFromPlayer, 900);
 }
 
-// Drift correction: nudge playback back toward the shared position.
-// Mobile players start slowly, so we (1) never touch a track that was just
-// loaded (grace window), (2) prefer seekTo over a full reload, and (3) only
-// reload when the live track is genuinely different AND we're past startup.
-// This stops the "plays a split second then pauses" reload loop on Android.
-function driftCheck() {
-  if (!ready || !playing) return;
-  // Give a freshly loaded track time to actually begin before judging drift.
+// Poll the server: if the live track changed, reload; otherwise correct drift.
+async function poll() {
+  if (!playing) return;
+  const prevId = view.nowPlaying?.id;
+  await fetchState();
+  const nowId = view.nowPlaying?.id;
+
+  if (!nowId) { return; } // station went empty; keep last frame
+
+  if (nowId !== prevId || nowId !== loadedId) {
+    // Track rolled over or admin/vote changed it — load the new one.
+    if (Date.now() - lastLoadAt > STARTUP_GRACE_MS) goLive();
+    else if (nowId !== loadedId) goLive();
+    return;
+  }
+  // Same track: gently correct if we've drifted from the server offset.
   if (Date.now() - lastLoadAt < STARTUP_GRACE_MS) return;
-  const p = livePosition();
-  if (!p) return;
-  // The live track has rolled over to a different song — reload to catch it.
-  if (p.index !== loadedIndex) { goLive(); return; }
-  // Same track, just correct position without reloading.
   try {
     const local = player.getCurrentTime();
-    if (Math.abs(local - p.offset) > 6) player.seekTo(p.offset, true);
+    const target = liveOffset();
+    if (Math.abs(local - target) > 6) player.seekTo(target, true);
   } catch {}
 }
-setInterval(driftCheck, 5000);
+setInterval(poll, POLL_MS);
+
+// ---- UI plumbing ----
+function setTitle(name) {
+  if (name) document.getElementById("nowtitle").innerHTML = "<b>" + name + "</b>";
+}
+function updateTitleFromPlayer() {
+  try {
+    const d = player.getVideoData();
+    if (d && d.title) setTitle(d.title);
+  } catch {}
+}
 
 function setPlaying(on) {
   playing = on;
@@ -94,35 +126,27 @@ function setPlaying(on) {
 }
 
 function onStateChange(e) {
-  if (e.data === YT.PlayerState.PLAYING) { setPlaying(true); updateTitle(); }
+  if (e.data === YT.PlayerState.PLAYING) { setPlaying(true); updateTitleFromPlayer(); }
   else if (e.data === YT.PlayerState.PAUSED) {
-    // Mobile browsers (incl. Vivaldi Android) often fire a transient PAUSED
-    // right after a video loads. If the user didn't press pause and we're
-    // still in the startup window, resume automatically instead of stopping.
     if (!userPaused && Date.now() - lastLoadAt < STARTUP_GRACE_MS) {
       try { player.playVideo(); } catch {}
       return;
     }
     setPlaying(false);
   }
-  else if (e.data === YT.PlayerState.ENDED) { goLive(); } // next track = whatever's live
+  else if (e.data === YT.PlayerState.ENDED) {
+    // Our copy ended; ask the server what's next and load it.
+    fetchState().then(goLive);
+  }
 }
 
-function updateTitle() {
-  try {
-    const d = player.getVideoData();
-    if (d && d.title) document.getElementById("nowtitle").innerHTML = "<b>" + d.title + "</b>";
-  } catch {}
-}
-setInterval(() => { if (ready && playing) updateTitle(); }, 3000);
-
-// Controls
+// ---- Controls ----
 document.getElementById("play").onclick = () => {
   if (!ready) return;
   if (playing) { userPaused = true; player.pauseVideo(); }
-  else { userPaused = false; goLive(); } // resuming rejoins the live position, not where you paused
+  else { userPaused = false; fetchState().then(goLive); }
 };
-document.getElementById("resync").onclick = async () => { userPaused = false; await fetchList(); goLive(); };
+document.getElementById("resync").onclick = async () => { userPaused = false; await fetchState(); goLive(); };
 document.getElementById("vol").oninput = (e) => { if (player) { player.unMute(); player.setVolume(+e.target.value); } };
 document.getElementById("mute").onclick = () => {
   if (!player) return;
@@ -132,8 +156,8 @@ document.getElementById("mute").onclick = () => {
 };
 
 document.getElementById("overlay").onclick = async () => {
-  await fetchList();
-  if (!items.length) { document.getElementById("nowtitle").textContent = "Nothing in rotation yet \u2014 add something in admin."; }
+  await fetchState();
+  if (!view.nowPlaying) { document.getElementById("nowtitle").textContent = "Nothing on air yet \u2014 add something in admin."; }
   document.getElementById("overlay").classList.add("hidden");
-  if (ready && items.length) { userPaused = false; player.setVolume(+document.getElementById("vol").value); goLive(); }
+  if (ready && view.nowPlaying) { userPaused = false; player.setVolume(+document.getElementById("vol").value); goLive(); }
 };

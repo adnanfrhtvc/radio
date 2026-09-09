@@ -1,15 +1,20 @@
 // POST /api/manage — admin only. One endpoint, several actions:
-//   { action: "add",     url, name }  → expand + append to rotation
-//   { action: "remove",  key }        → drop a track from rotation
-//   { action: "reject",  key }        → drop a pending suggestion
-//   { action: "reorder", keys }       → reorder rotation to match keys[]
+//   { action: "add",       url, name }  → expand + append to the pool
+//   { action: "remove",    key }        → drop a track from the pool
+//   { action: "removeAll" }             → clear the entire pool
+//   { action: "reject",    key }        → drop a pending suggestion
+//   { action: "reorder",   keys }       → reorder the pool to match keys[]
+//
+// Removing tracks never disrupts what's currently playing: the pool is separate
+// from the live playback state, so the current track plays to its end. We only
+// drop the removed track from the upcoming queue, if it's sitting there.
 
-import { stores, readList, writeList } from "./lib/store.js";
+import { stores, readList, writeList, readState, writeState } from "./lib/store.js";
 import { checkAuth } from "./lib/auth.js";
 import { json, readJson } from "./lib/http.js";
 import { hasKey, expandToTracks } from "./lib/youtube-api.js";
 import { appendTracks, reorderByKeys } from "./lib/rotation.js";
-import { parseYouTube } from "../../public/shared/youtube-url.js";
+import { parseYouTube } from "./lib/youtube-url.js";
 
 export default async (req) => {
   if (!checkAuth(req)) return json({ error: "Unauthorized" }, 401);
@@ -18,7 +23,7 @@ export default async (req) => {
   const body = await readJson(req);
   if (!body) return json({ error: "Bad JSON" }, 400);
 
-  const { suggestions, active } = stores();
+  const { suggestions, active, playback } = stores();
 
   switch (body.action) {
     case "reject": {
@@ -29,7 +34,23 @@ export default async (req) => {
 
     case "remove": {
       const list = await readList(active);
+      const target = list.find((x) => x.key === body.key);
       await writeList(active, list.filter((x) => x.key !== body.key));
+      if (target) {
+        const state = await readState(playback);
+        if (state.queue?.some((t) => t.id === target.id)) {
+          state.queue = state.queue.filter((t) => t.id !== target.id);
+          await writeState(playback, state);
+        }
+      }
+      return json({ ok: true });
+    }
+
+    case "removeAll": {
+      await writeList(active, []);
+      const state = await readState(playback);
+      state.queue = [];
+      await writeState(playback, state);
       return json({ ok: true });
     }
 

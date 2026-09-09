@@ -4,7 +4,7 @@
 
 import { stores, readList, writeList } from "./lib/store.js";
 import { json, readJson } from "./lib/http.js";
-import { parseYouTube } from "../../public/shared/youtube-url.js";
+import { parseYouTube } from "./lib/youtube-url.js";
 
 export default async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);

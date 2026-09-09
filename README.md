@@ -60,9 +60,16 @@ npm run dev               # netlify dev — serves site + functions locally
 
 ## How sync works (short version)
 
-Every rotation item is a single video with a known duration; playlists are
-expanded into their videos at add-time (a fixed snapshot). The player computes
-`(server_time − epoch) mod total_runtime` to find the current track + offset and
-seeks there, re-checking periodically to correct drift. Pausing then playing
-rejoins the **live** position — the "⟳ LIVE" button forces a re-sync. Full
-detail in `docs/ARCHITECTURE.md`.
+Playback is **server-authoritative**. The server owns "now playing" — which
+track and the moment it started — in the `playback` blob store. The player calls
+`/api/state`, loads that track at the right offset, and polls every few seconds
+to catch changes. Every rotation item is a single video with a known duration;
+playlists are expanded into their videos at add-time (a fixed snapshot).
+
+Because the server owns playback, removing a track from the pool never
+interrupts what's playing — the current track finishes, then the next is chosen
+from whatever remains. The station advances lazily on request traffic (no cron):
+with nobody listening it fast-forwards on the next request. Full detail in
+`docs/ARCHITECTURE.md`.
+
+Run the engine's unit tests with `npm test`.

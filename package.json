@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "dev": "netlify dev",
-    "deploy": "netlify deploy --prod"
+    "deploy": "netlify deploy --prod",
+    "test": "node tests/playback.test.mjs"
   },
   "dependencies": {
     "@netlify/blobs": "^8.1.0"

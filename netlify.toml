@@ -8,8 +8,6 @@
 
 [functions]
   node_bundler = "esbuild"
-  # Ensure the shared modules (imported via relative path) are bundled in.
-  included_files = ["public/shared/**"]
 
 # Pretty URLs: /admin and /suggest resolve to their .html files.
 [[redirects]]
