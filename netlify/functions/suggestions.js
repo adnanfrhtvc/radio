@@ -1,9 +1,13 @@
-import { stores, readList, checkAuth, json } from "./utils/store.js";
+// GET /api/suggestions — admin only. Newest suggestions first.
+
+import { stores, readList } from "./lib/store.js";
+import { checkAuth } from "./lib/auth.js";
+import { json } from "./lib/http.js";
 
 export default async (req) => {
   if (!checkAuth(req)) return json({ error: "Unauthorized" }, 401);
   const { suggestions } = stores();
-  const list = await readList(suggestions, "list");
+  const list = await readList(suggestions);
   return json({ items: list.sort((a, b) => b.at - a.at) });
 };
 

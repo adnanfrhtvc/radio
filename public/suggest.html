@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Suggest a track</title>
+<link rel="stylesheet" href="/css/suggest.css">
+</head>
+<body>
+  <h1>Suggest a track</h1>
+  <p class="sub">Paste a YouTube video or playlist link. It'll be reviewed before it goes into rotation.</p>
+
+  <label for="url">YouTube link</label>
+  <input id="url" placeholder="https://youtube.com/watch?v=… or a playlist link">
+
+  <label for="name">Label (optional)</label>
+  <input id="name" placeholder="e.g. Lo-fi mix">
+
+  <label for="note">Note to the curator (optional)</label>
+  <textarea id="note" placeholder="Anything you want to add"></textarea>
+
+  <button id="send">Submit suggestion</button>
+  <div id="msg"></div>
+
+<script src="/js/suggest.js"></script>
+</body>
+</html>

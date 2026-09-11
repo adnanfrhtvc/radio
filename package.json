@@ -1,9 +1,18 @@
 {
-  "name": "youtube-looper",
-  "version": "1.0.0",
+  "name": "hidrocibalae-radio",
+  "version": "2.0.0",
+  "description": "Synced, vinyl-themed web radio built on YouTube, Netlify Functions, and Netlify Blobs.",
   "type": "module",
   "private": true,
+  "scripts": {
+    "dev": "netlify dev",
+    "deploy": "netlify deploy --prod",
+    "test": "node tests/playback.test.mjs"
+  },
   "dependencies": {
     "@netlify/blobs": "^8.1.0"
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.0.0"
   }
 }

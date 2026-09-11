@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin</title>
+<link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <div id="gate">
+    <h1>Admin</h1>
+    <input id="pw" type="password" placeholder="Password">
+    <button id="enter">Enter</button>
+    <div id="gerr" style="color:#ff8a8a;margin-top:8px;min-height:1.2em"></div>
+  </div>
+
+  <div id="app" style="display:none">
+    <h1>Admin</h1>
+
+    <h2>Add directly to rotation</h2>
+    <div id="add">
+      <input id="addurl" placeholder="YouTube video or playlist link">
+      <input id="addname" placeholder="Label (optional)" style="max-width:180px">
+      <button class="act ok" id="addbtn">Add</button>
+    </div>
+
+    <h2>Pending suggestions</h2>
+    <div id="suggestions"></div>
+
+    <h2>Active rotation</h2>
+    <div class="hint">Drag the ⠿ handle to reorder. Order is saved automatically.</div>
+    <button class="act no" id="removeAll" style="margin-bottom:10px;">Remove all</button>
+    <div id="active"></div>
+  </div>
+
+<script src="/js/admin.js"></script>
+</body>
+</html>
