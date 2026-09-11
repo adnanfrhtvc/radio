@@ -10,9 +10,9 @@ const fmtDur = (s) => { s = Math.round(s||0); const m = Math.floor(s/60); const 
 async function loadAll() {
   const [sres, ares] = await Promise.all([
     fetch("/api/suggestions", { headers: H() }),
-    fetch("/api/list"),
+    fetch("/api/pool", { headers: H() }),
   ]);
-  if (sres.status === 401) { logout(); return; }
+  if (sres.status === 401 || ares.status === 401) { logout(); return; }
   const s = await sres.json();
   const a = await ares.json();
   renderSuggestions(s.items || []);
@@ -102,6 +102,12 @@ document.getElementById("addbtn").onclick = async () => {
   if (typeof d.added === "number" && d.total > 1) alert(`Added ${d.added} of ${d.total} track(s) from that playlist.`);
   document.getElementById("addurl").value = "";
   document.getElementById("addname").value = "";
+  loadAll();
+};
+
+document.getElementById("removeAll").onclick = async () => {
+  if (!confirm("Remove ALL tracks from the rotation? This can't be undone.")) return;
+  await post("/api/manage", { action: "removeAll" });
   loadAll();
 };
 
