@@ -6,8 +6,8 @@
 //   - expand a playlist into its videos
 //   - turn a parsed { type, id } into concrete track objects
 //
-// Pure URL/ID parsing lives in shared/youtube-url.js instead, so the browser
-// can reuse it without ever seeing the API key.
+// Pure URL/ID parsing lives in lib/youtube-url.js, which has no secrets and
+// no I/O.
 
 const KEY = () => process.env.YOUTUBE_API_KEY;
 

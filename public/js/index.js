@@ -8,7 +8,7 @@
 // pauses) don't stall.
 
 let player, ready = false, playing = false, userPaused = false;
-let lastLoadAt = 0, loadedId = null;
+let lastLoadAt = 0, loadedId = null, loadedStartedAt = null;
 const STARTUP_GRACE_MS = 6000;
 const POLL_MS = 4000;
 
@@ -76,25 +76,30 @@ function goLive() {
   if (!ready || !view.nowPlaying) return;
   const it = view.nowPlaying;
   loadedId = it.id;
+  loadedStartedAt = view.startedAt;
   lastLoadAt = Date.now();
   player.loadVideoById({ videoId: it.id, startSeconds: Math.floor(liveOffset()) });
   setTitle(it.name);
   setTimeout(updateTitleFromPlayer, 900);
 }
 
+// A "play" is identified by track ID + the moment it started, so the same
+// song starting again (one-track station, admin replay) still counts as new.
+const isLoadedPlay = () =>
+  view.nowPlaying?.id === loadedId && view.startedAt === loadedStartedAt;
+
 // Poll the server: if the live track changed, reload; otherwise correct drift.
 async function poll() {
   if (!playing) return;
-  const prevId = view.nowPlaying?.id;
   await fetchState();
   const nowId = view.nowPlaying?.id;
 
   if (!nowId) { return; } // station went empty; keep last frame
 
-  if (nowId !== prevId || nowId !== loadedId) {
-    // Track rolled over or admin/vote changed it — load the new one.
-    if (Date.now() - lastLoadAt > STARTUP_GRACE_MS) goLive();
-    else if (nowId !== loadedId) goLive();
+  if (!isLoadedPlay()) {
+    // Track rolled over or admin/vote changed it — load the new one. During
+    // the startup grace window only a different track forces a reload.
+    if (Date.now() - lastLoadAt > STARTUP_GRACE_MS || nowId !== loadedId) goLive();
     return;
   }
   // Same track: gently correct if we've drifted from the server offset.
@@ -109,7 +114,11 @@ setInterval(poll, POLL_MS);
 
 // ---- UI plumbing ----
 function setTitle(name) {
-  if (name) document.getElementById("nowtitle").innerHTML = "<b>" + name + "</b>";
+  if (!name) return;
+  // textContent, not innerHTML: titles come from YouTube / admin labels.
+  const b = document.createElement("b");
+  b.textContent = name;
+  document.getElementById("nowtitle").replaceChildren(b);
 }
 function updateTitleFromPlayer() {
   try {
@@ -136,8 +145,24 @@ function onStateChange(e) {
   }
   else if (e.data === YT.PlayerState.ENDED) {
     // Our copy ended; ask the server what's next and load it.
-    fetchState().then(goLive);
+    followAfterEnd();
   }
+}
+
+// Our local copy can finish a moment before the server rolls over (clock
+// rounding, small drift). Reloading then would replay the last second of the
+// same track in a loop, so wait until the server has actually moved on.
+let endRetry = null;
+async function followAfterEnd(attempt = 0) {
+  clearTimeout(endRetry);
+  await fetchState();
+  const np = view.nowPlaying;
+  if (np && isLoadedPlay() && attempt < 10) {
+    const left = Math.max(0, (np.seconds || 0) - liveOffset());
+    endRetry = setTimeout(() => followAfterEnd(attempt + 1), Math.min(left + 0.5, 5) * 1000);
+    return;
+  }
+  goLive();
 }
 
 // ---- Controls ----

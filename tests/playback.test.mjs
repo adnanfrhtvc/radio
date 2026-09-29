@@ -1,4 +1,4 @@
-import { advance, pickNext, recordRecent, offsetInto } from "../netlify/functions/lib/playback.js";
+import { advance, pickNext, recordRecent, offsetInto, seededRandom, stateSeed } from "../netlify/functions/lib/playback.js";
 let pass=0, fail=0;
 function ok(name, cond){ if(cond){pass++;} else {fail++; console.log("FAIL:", name);} }
 
@@ -63,6 +63,21 @@ ok("offset correct", offsetInto({nowPlaying:{id:"a"},startedAt:1000}, 1042)===42
 let zpool=[{id:"z1",seconds:0},{id:"z2",seconds:0}];
 let zs = advance({}, zpool, 1000, {randomFn:firstPick});
 ok("zero-dur bootstraps without hang", zs.nowPlaying!==null);
+
+// 12) seeded pick: two requests advancing the same state agree
+{
+  const big = Array.from({length:30}, (_,i)=>({id:"t"+i,name:"T"+i,seconds:100}));
+  const st = {nowPlaying:big[0], startedAt:1000, recent:[], queue:[]};
+  const run = () => advance(st, big, 1100, {randomFn: seededRandom(stateSeed(st, 1100))});
+  const a = run(), b = run();
+  ok("same state → same next track", a.nowPlaying.id === b.nowPlaying.id && a.startedAt === b.startedAt);
+  const picks = new Set();
+  for (let k=0;k<20;k++){ const s2={...st, startedAt:1000+k*100}; picks.add(advance(s2,big,s2.startedAt+100,{randomFn:seededRandom(stateSeed(s2,0))}).nowPlaying.id); }
+  ok("different states → varied picks", picks.size > 5);
+  const r = seededRandom("x"); let inRange = true; for (let k=0;k<1000;k++){ const v=r(); if(v<0||v>=1) inRange=false; }
+  ok("seeded values in [0,1)", inRange);
+  ok("boot seed stable within a minute", stateSeed({}, 600) === stateSeed({}, 659));
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail?1:0);

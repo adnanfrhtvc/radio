@@ -5,6 +5,10 @@ const ytLink = (it) => it.type === "playlist"
   ? `https://youtube.com/playlist?list=${it.id}`
   : `https://youtube.com/watch?v=${it.id}`;
 const videoLink = (id) => `https://youtube.com/watch?v=${id}`;
+// Escape anything that didn't come from us before it goes into innerHTML.
+// Suggestion labels/notes are typed by the public, and track names come from
+// YouTube, so both must be treated as untrusted text.
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmtDur = (s) => { s = Math.round(s||0); const m = Math.floor(s/60); const ss = String(s%60).padStart(2,"0"); return m + ":" + ss; };
 
 async function loadAll() {
@@ -27,14 +31,19 @@ function renderSuggestions(list) {
     const div = document.createElement("div");
     div.className = "row";
     div.innerHTML = `
-      <span class="tag">${it.type}</span>
+      <span class="tag">${esc(it.type)}</span>
       <div class="main">
-        <b>${it.name || "(no label)"}</b>
-        <small>${it.note ? it.note + " · " : ""}<a class="linkout" target="_blank" href="${ytLink(it)}">${ytLink(it)}</a></small>
+        <b>${esc(it.name || "(no label)")}</b>
+        <small>${it.note ? esc(it.note) + " · " : ""}<a class="linkout" target="_blank" rel="noopener" href="${esc(ytLink(it))}">${esc(ytLink(it))}</a></small>
       </div>
       <button class="act ok">Approve</button>
       <button class="act no">Reject</button>`;
-    div.querySelector(".ok").onclick = async () => { await post("/api/approve", { key: it.key }); loadAll(); };
+    div.querySelector(".ok").onclick = async (e) => {
+      e.target.disabled = true; e.target.textContent = "Approving…";
+      const d = await post("/api/approve", { key: it.key });
+      if (d.error) alert(d.error);
+      loadAll();
+    };
     div.querySelector(".no").onclick = async () => { await post("/api/manage", { action: "reject", key: it.key }); loadAll(); };
     el.appendChild(div);
   }
@@ -60,8 +69,8 @@ function renderActive(list) {
       <span class="grip" title="Drag to reorder">⠿</span>
       <span class="tag">${fmtDur(it.seconds)}</span>
       <div class="main">
-        <b>${it.name || "(no label)"}</b>
-        <small><a class="linkout" target="_blank" href="${videoLink(it.id)}">${videoLink(it.id)}</a></small>
+        <b>${esc(it.name || "(no label)")}</b>
+        <small><a class="linkout" target="_blank" rel="noopener" href="${esc(videoLink(it.id))}">${esc(videoLink(it.id))}</a></small>
       </div>
       <button class="act no">Remove</button>`;
     div.querySelector(".no").onclick = async () => { await post("/api/manage", { action: "remove", key: it.key }); loadAll(); };
@@ -86,9 +95,13 @@ async function saveOrder() {
 }
 
 async function post(url, body) {
-  const r = await fetch(url, { method: "POST", headers: H(), body: JSON.stringify(body) });
-  if (r.status === 401) { logout(); }
-  return r.json();
+  try {
+    const r = await fetch(url, { method: "POST", headers: H(), body: JSON.stringify(body) });
+    if (r.status === 401) { logout(); return { error: "Unauthorized" }; }
+    return await r.json().catch(() => ({ error: `Server error (${r.status})` }));
+  } catch {
+    return { error: "Network error — check your connection." };
+  }
 }
 
 document.getElementById("addbtn").onclick = async () => {

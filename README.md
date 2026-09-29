@@ -10,8 +10,7 @@ Static frontend + Netlify Functions + Netlify Blobs. No build step.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full picture. In short:
 
-- `public/` — the site (HTML/CSS/JS), served as-is; `public/shared/` holds logic
-  used by both the browser and the functions.
+- `public/` — the site (HTML/CSS/JS), served as-is.
 - `netlify/functions/` — HTTP endpoints; `lib/` holds the backend services they
   call.
 - Root — `netlify.toml`, `package.json`, `.env.example`.
@@ -72,4 +71,4 @@ from whatever remains. The station advances lazily on request traffic (no cron):
 with nobody listening it fast-forwards on the next request. Full detail in
 `docs/ARCHITECTURE.md`.
 
-Run the engine's unit tests with `npm test`.
+Run the unit tests (playback engine + link parsing) with `npm test`.

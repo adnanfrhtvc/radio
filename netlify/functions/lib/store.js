@@ -17,11 +17,18 @@ import { getStore } from "@netlify/blobs";
 const LIST_KEY = "list";
 const STATE_KEY = "state";
 
+// Strong consistency: Netlify Blobs defaults to "eventual", where a read can
+// return data up to ~60s stale. For a synced radio that means an admin skip
+// (or a track rollover) might not reach some listeners for a minute, and two
+// function instances could disagree about what's playing. Strong reads always
+// see the latest write, at a small latency cost.
+const open = (name) => getStore({ name, consistency: "strong" });
+
 export function stores() {
   return {
-    active: getStore("active"),
-    suggestions: getStore("suggestions"),
-    playback: getStore("playback"),
+    active: open("active"),
+    suggestions: open("suggestions"),
+    playback: open("playback"),
   };
 }
 
