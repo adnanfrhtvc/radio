@@ -69,6 +69,7 @@ export async function expandToTracks(parsed, fallbackName = "") {
     const meta = await fetchVideoMeta([parsed.id]);
     const m = meta.get(parsed.id);
     if (!m || m.seconds === 0) throw new Error("Video not found or has no duration.");
+    if (!m.embeddable) throw new Error("That video can't be played outside YouTube (the uploader disabled embedding).");
     return [{ id: parsed.id, name: fallbackName || m.title, seconds: m.seconds }];
   }
 

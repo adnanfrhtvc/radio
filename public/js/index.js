@@ -9,6 +9,7 @@
 
 let player, ready = false, playing = false, userPaused = false;
 let lastLoadAt = 0, loadedId = null, loadedStartedAt = null;
+let playError = false; // current track failed to load in this browser
 const STARTUP_GRACE_MS = 6000;
 const POLL_MS = 4000;
 
@@ -67,7 +68,7 @@ window.onYouTubeIframeAPIReady = () => {
   player = new YT.Player("player", {
     height: "120", width: "200",
     playerVars: { autoplay: 0, controls: 0, rel: 0 },
-    events: { onReady: () => { ready = true; }, onStateChange }
+    events: { onReady: () => { ready = true; }, onStateChange, onError }
   });
 };
 
@@ -78,6 +79,7 @@ function goLive() {
   loadedId = it.id;
   loadedStartedAt = view.startedAt;
   lastLoadAt = Date.now();
+  playError = false;
   player.loadVideoById({ videoId: it.id, startSeconds: Math.floor(liveOffset()) });
   setTitle(it.name);
   setTimeout(updateTitleFromPlayer, 900);
@@ -103,7 +105,7 @@ async function poll() {
     return;
   }
   // Same track: gently correct if we've drifted from the server offset.
-  if (Date.now() - lastLoadAt < STARTUP_GRACE_MS) return;
+  if (playError || Date.now() - lastLoadAt < STARTUP_GRACE_MS) return;
   try {
     const local = player.getCurrentTime();
     const target = liveOffset();
@@ -111,6 +113,15 @@ async function poll() {
   } catch {}
 }
 setInterval(poll, POLL_MS);
+
+// A video can fail in one browser (removed, region-blocked, embedding turned
+// off after it was added). Other listeners may be fine, so we don't skip for
+// everyone — we say so and pick up the next track when the server rolls over.
+function onError() {
+  playError = true;
+  document.getElementById("nowtitle").textContent =
+    "This track can't play here — the next one will start automatically.";
+}
 
 // ---- UI plumbing ----
 function setTitle(name) {
