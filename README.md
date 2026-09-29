@@ -17,8 +17,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full picture. In shor
 
 ## Pages
 
-- `/`        — the player (spinning vinyl, on-air panel, synced playback)
-- `/suggest` — public page for others to submit links
+- `/`        — the player (spinning vinyl, on-air panel, synced playback, suggest modal)
 - `/admin`   — your review panel (password-protected)
 
 ## Environment variables

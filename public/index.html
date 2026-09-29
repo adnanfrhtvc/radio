@@ -43,10 +43,36 @@
           <input id="vol" type="range" min="0" max="100" value="70">
         </div>
       </div>
-      <div class="footer">33 ⅓ RPM · STEREO &nbsp;·&nbsp; <a href="/suggest">SUGGEST A TRACK →</a></div>
+      <div class="footer">33 ⅓ RPM · STEREO &nbsp;·&nbsp; <a href="#" id="openSuggest">SUGGEST A TRACK →</a></div>
     </div>
   </div>
   <div class="start-overlay" id="overlay"><div class="btn">▶ &nbsp;TUNE IN</div></div>
+
+  <!-- Suggest-a-track modal (music keeps playing underneath) -->
+  <div class="modal-backdrop" id="suggestModal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="suggestTitle">
+      <button class="modal-close" id="suggestClose" aria-label="Close">×</button>
+      <h2 id="suggestTitle">Suggest a track</h2>
+      <p class="modal-sub">Paste a YouTube video or playlist link. Preview what gets added, then send it in for review.</p>
+
+      <label for="s-url">YouTube link</label>
+      <input id="s-url" placeholder="https://youtube.com/watch?v=… or a playlist link" autocomplete="off">
+
+      <div id="s-preview" class="preview" hidden>
+        <div class="preview-head" id="s-preview-head"></div>
+        <div class="preview-list" id="s-preview-list"></div>
+      </div>
+
+      <label for="s-name">Label (optional)</label>
+      <input id="s-name" placeholder="e.g. Lo-fi mix" autocomplete="off">
+
+      <label for="s-note">Note to the curator (optional)</label>
+      <textarea id="s-note" placeholder="Anything you want to add"></textarea>
+
+      <button id="s-send" class="modal-send">Submit suggestion</button>
+      <div id="s-msg" class="modal-msg"></div>
+    </div>
+  </div>
 <script type="module" src="/js/index.js"></script>
 </body>
 </html>
