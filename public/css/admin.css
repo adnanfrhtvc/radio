@@ -23,3 +23,9 @@ a.linkout { color: #7db9ff; font-size: 0.8rem; }
 .row.over { border-color: #4a7bb5; }
 .hint { opacity: 0.35; font-size: 0.8rem; margin-bottom: 8px; }
 .runtime { opacity: 0.55; font-size: 0.8rem; margin-bottom: 10px; }
+.live { display: flex; align-items: center; gap: 12px; background: #141414; border: 1px solid #262626; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+.nowbox { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.nowlabel { font-size: 0.65rem; letter-spacing: 0.18em; color: #56c3bb; border: 1px solid #2f7d78; border-radius: 999px; padding: 2px 8px; }
+#nowplaying { color: #eaf3f2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .play { border-color: #2f7d78; color: #56c3bb; }
+.row .play:hover { background: #12302e; }

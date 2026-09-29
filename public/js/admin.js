@@ -72,7 +72,15 @@ function renderActive(list) {
         <b>${esc(it.name || "(no label)")}</b>
         <small><a class="linkout" target="_blank" rel="noopener" href="${esc(videoLink(it.id))}">${esc(videoLink(it.id))}</a></small>
       </div>
+      <button class="act play" title="Play this now for everyone">▶</button>
       <button class="act no">Remove</button>`;
+    div.querySelector(".play").onclick = async (e) => {
+      e.target.disabled = true;
+      const d = await post("/api/control", { action: "playNow", key: it.key });
+      e.target.disabled = false;
+      if (d.error) { alert(d.error); return; }
+      showNowPlaying(d.view);
+    };
     div.querySelector(".no").onclick = async () => { await post("/api/manage", { action: "remove", key: it.key }); loadAll(); };
 
     div.addEventListener("dragstart", () => { dragKey = it.key; div.classList.add("dragging"); });
@@ -124,10 +132,35 @@ document.getElementById("removeAll").onclick = async () => {
   loadAll();
 };
 
+document.getElementById("skipBtn").onclick = async () => {
+  const btn = document.getElementById("skipBtn");
+  btn.disabled = true;
+  const d = await post("/api/control", { action: "skip" });
+  btn.disabled = false;
+  if (d.error) { alert(d.error); return; }
+  showNowPlaying(d.view);
+};
+
+function showNowPlaying(v) {
+  if (!v) return;
+  document.getElementById("nowplaying").textContent =
+    v.nowPlaying ? v.nowPlaying.name : "— (nothing playing)";
+}
+
+// Poll the public state endpoint so the admin sees what's actually on air.
+async function refreshNowPlaying() {
+  try {
+    const r = await fetch("/api/state");
+    showNowPlaying(await r.json());
+  } catch {}
+}
+setInterval(() => { if (PW) refreshNowPlaying(); }, 5000);
+
 function login() {
   document.getElementById("gate").style.display = "none";
   document.getElementById("app").style.display = "block";
   loadAll();
+  refreshNowPlaying();
 }
 function logout() {
   sessionStorage.removeItem("pw"); PW = "";

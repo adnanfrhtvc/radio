@@ -10,7 +10,7 @@ import { advance, offsetInto, seededRandom, stateSeed } from "./playback.js";
 
 // Advance the station to the present and persist. Returns a client-facing view.
 // `mutate` optionally transforms the state BEFORE advancing (used by skip /
-// play-now / clear to inject a change), and receives (state, pool) → newState.
+// play-now / clear to inject a change), and receives (state, pool, now) → newState.
 export async function tick(stores, { mutate } = {}) {
   const now = Math.floor(Date.now() / 1000);
   const pool = await readList(stores.active);
@@ -19,7 +19,7 @@ export async function tick(stores, { mutate } = {}) {
   const before = JSON.stringify(state);
 
   if (typeof mutate === "function") {
-    state = mutate(state, pool) || state;
+    state = mutate(state, pool, now) || state;
   }
 
   // Seeded from the state being advanced, so concurrent requests agree.
