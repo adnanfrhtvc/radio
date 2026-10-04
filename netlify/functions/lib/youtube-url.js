@@ -4,6 +4,15 @@
 // functions. Kept separate from the server-only YouTube Data API calls (which
 // need a secret key and live in netlify/functions/lib/youtube-api.js).
 
+const VIDEO_ID = /^[\w-]{11}$/;
+const PLAYLIST_ID = /^[\w-]{10,64}$/;
+
+// Only accept IDs made of YouTube's own alphabet. Anything else (quotes, angle
+// brackets, "&key=…") is rejected, because the ID ends up in API URLs and in
+// admin-page links.
+const video = (id) => (VIDEO_ID.test(id || "") ? { type: "video", id } : null);
+const playlist = (id) => (PLAYLIST_ID.test(id || "") ? { type: "playlist", id } : null);
+
 // Returns { type: "video" | "playlist", id } or null if nothing recognizable.
 export function parseYouTube(input) {
   const s = (input || "").trim();
@@ -20,18 +29,18 @@ export function parseYouTube(input) {
   try { url = new URL(s); } catch { return null; }
 
   const list = url.searchParams.get("list");
-  if (list) return { type: "playlist", id: list };
-
   const v = url.searchParams.get("v");
-  if (v) return { type: "video", id: v };
 
-  if (url.hostname === "youtu.be") {
-    const id = url.pathname.slice(1);
-    if (/^[\w-]{11}$/.test(id)) return { type: "video", id };
-  }
+  // "watch?v=X&list=RD…" is a YouTube Mix: auto-generated, and the API can't
+  // expand it. Someone pasting that almost always means the song they're on.
+  if (v && list && /^RD/.test(list)) return video(v);
+  if (list && playlist(list)) return playlist(list);
+  if (v) return video(v);
 
-  const m = url.pathname.match(/\/(embed|shorts)\/([\w-]{11})/);
-  if (m) return { type: "video", id: m[2] };
+  if (url.hostname === "youtu.be") return video(url.pathname.slice(1));
+
+  const m = url.pathname.match(/\/(embed|shorts|live)\/([\w-]{11})(?:[/?#]|$)/);
+  if (m) return video(m[2]);
 
   return null;
 }

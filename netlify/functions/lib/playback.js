@@ -113,6 +113,32 @@ export function advance(state, pool, now, opts = {}) {
   return { nowPlaying, startedAt, recent, queue };
 }
 
+// Deterministic PRNG (mulberry32) seeded from a string. Used so that two
+// requests advancing the SAME stored state pick the SAME next track, instead
+// of racing with different random picks and making listeners flip-flop.
+export function seededRandom(seed) {
+  let h = 1779033703 ^ seed.length;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  let a = h >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// The seed for advancing a given state: identical inputs → identical seed.
+// When nothing is playing yet there is no history to key on, so use the
+// current minute (concurrent bootstraps still agree).
+export function stateSeed(state, now) {
+  const np = state?.nowPlaying;
+  return np ? `${np.id}|${state.startedAt}` : `boot|${Math.floor(now / 60)}`;
+}
+
 // How far into the current track we are, given the server clock.
 export function offsetInto(state, now) {
   if (!state?.nowPlaying) return 0;

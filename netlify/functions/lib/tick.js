@@ -6,7 +6,7 @@
 // and returns the current view for the client.
 
 import { readList, readState, writeState } from "./store.js";
-import { advance, offsetInto } from "./playback.js";
+import { advance, offsetInto, seededRandom, stateSeed } from "./playback.js";
 
 // Advance the station to the present and persist. Returns a client-facing view.
 // `mutate` optionally transforms the state BEFORE advancing (used by skip /
@@ -22,7 +22,8 @@ export async function tick(stores, { mutate } = {}) {
     state = mutate(state, pool) || state;
   }
 
-  state = advance(state, pool, now);
+  // Seeded from the state being advanced, so concurrent requests agree.
+  state = advance(state, pool, now, { randomFn: seededRandom(stateSeed(state, now)) });
 
   if (JSON.stringify(state) !== before) {
     await writeState(stores.playback, state);

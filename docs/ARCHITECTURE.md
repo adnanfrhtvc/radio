@@ -30,6 +30,8 @@ netlify/functions/          ← HTTP entry points ("controllers"), one per route
     youtube-url.js              parse a YouTube link → { type, id } (pure)
     rotation.js                 dedupe-append + reorder helpers (pure)
 
+tests/                      unit tests for the pure modules (npm test)
+
 netlify.toml                config: publish dir, functions dir, redirects
 package.json                metadata + scripts
 .env.example                documents required env vars
@@ -39,7 +41,8 @@ package.json                metadata + scripts
 
 Entry points stay thin: parse the request, check auth, call a service, return
 JSON. All real work lives in `lib/`. Pure modules (`playback.js`,
-`youtube-url.js`, `rotation.js`) have no I/O and are unit-tested directly.
+`youtube-url.js`, `rotation.js`) have no I/O, so they can be unit-tested
+directly (`tests/`).
 
 ## Playback model (server-authoritative)
 
@@ -66,6 +69,16 @@ There is **no cron**. `lib/tick.js` calls `advance` on every read of
 persists only when something changed. With nobody listening it simply
 fast-forwards on the next request — radio doesn't care about gaps in an empty
 room.
+
+Two details keep every listener on the same track:
+
+- **Strong reads.** All blob stores are opened with `consistency: "strong"`.
+  The Netlify default ("eventual") can serve reads up to ~60s stale, which
+  would delay admin skips and let function instances disagree.
+- **Deterministic picks.** `tick` seeds the random pick from the state being
+  advanced (`stateSeed`: current track + its start time). Two requests that
+  hit a track boundary at the same moment compute the same next track instead
+  of racing with different random choices.
 
 The browser calls `/api/state`, loads `nowPlaying` at `offset`, and polls every
 few seconds to catch rollovers, admin skips, or vote-skips — with a startup
