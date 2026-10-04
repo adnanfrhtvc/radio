@@ -9,13 +9,15 @@
 [functions]
   node_bundler = "esbuild"
 
-# Pretty URLs: /admin and /suggest resolve to their .html files.
+# Pretty URL: /admin resolves to its .html file.
 [[redirects]]
   from = "/admin"
   to = "/admin.html"
   status = 200
 
+# The standalone suggest page became a modal on the player; keep old shared
+# links working by opening the modal instead.
 [[redirects]]
   from = "/suggest"
-  to = "/suggest.html"
-  status = 200
+  to = "/#suggest"
+  status = 301

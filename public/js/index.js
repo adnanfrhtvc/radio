@@ -197,3 +197,134 @@ document.getElementById("overlay").onclick = async () => {
   document.getElementById("overlay").classList.add("hidden");
   if (ready && view.nowPlaying) { userPaused = false; player.setVolume(+document.getElementById("vol").value); goLive(); }
 };
+
+// ---- Suggest-a-track modal ----
+// Opens over the vinyl without touching the radio (music keeps playing). As the
+// user types a link, we debounce-fetch /api/preview to show exactly which tracks
+// would be added — one for a video, the full expanded list for a playlist.
+(function suggestModal() {
+  const modal = document.getElementById("suggestModal");
+  const urlEl = document.getElementById("s-url");
+  const nameEl = document.getElementById("s-name");
+  const noteEl = document.getElementById("s-note");
+  const msg = document.getElementById("s-msg");
+  const previewBox = document.getElementById("s-preview");
+  const previewHead = document.getElementById("s-preview-head");
+  const previewList = document.getElementById("s-preview-list");
+  const sendBtn = document.getElementById("s-send");
+
+  const fmt = (s) => { s = Math.round(s || 0); const m = Math.floor(s / 60); return m + ":" + String(s % 60).padStart(2, "0"); };
+
+  let closeTimer = null;
+  function open() {
+    clearTimeout(closeTimer);
+    modal.hidden = false;
+    setTimeout(() => urlEl.focus(), 50);
+  }
+  function close() {
+    clearTimeout(closeTimer);
+    clearTimeout(previewTimer);
+    modal.hidden = true;
+    urlEl.value = nameEl.value = noteEl.value = "";
+    msg.textContent = ""; msg.className = "modal-msg";
+    resetPreview();
+  }
+  function resetPreview() {
+    lastPreviewed = "";
+    previewSeq++; // any in-flight preview response is now stale
+    previewBox.hidden = true;
+    previewList.replaceChildren();
+  }
+  // One preview row, built with textContent — titles come from YouTube.
+  function row(cls, name, dur) {
+    const r = document.createElement("div");
+    r.className = "preview-row" + (cls ? " " + cls : "");
+    const n = document.createElement("span");
+    n.className = "pname"; n.textContent = name;
+    r.appendChild(n);
+    if (dur != null) {
+      const d = document.createElement("span");
+      d.className = "pdur"; d.textContent = dur;
+      r.appendChild(d);
+    }
+    return r;
+  }
+
+  document.getElementById("openSuggest").addEventListener("click", (e) => { e.preventDefault(); open(); });
+  document.getElementById("suggestClose").addEventListener("click", close);
+  modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !modal.hidden) close(); });
+
+  // Debounced live preview. `previewSeq` makes sure only the response for the
+  // most recent link is shown, even if an older request finishes later.
+  let previewTimer = null, lastPreviewed = "", previewSeq = 0;
+  urlEl.addEventListener("input", () => {
+    const url = urlEl.value.trim();
+    clearTimeout(previewTimer);
+    if (!url) { resetPreview(); return; }
+    previewTimer = setTimeout(() => runPreview(url), 600);
+  });
+
+  async function runPreview(url) {
+    if (url === lastPreviewed) return;
+    lastPreviewed = url;
+    const seq = ++previewSeq;
+    previewBox.hidden = false;
+    previewHead.textContent = "Checking…";
+    previewList.replaceChildren(row("loading", "Loading preview…"));
+    try {
+      const r = await fetch("/api/preview", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (seq !== previewSeq) return;
+      if (!r.ok) throw new Error(d.error || "Couldn't preview that link.");
+      renderPreview(d);
+    } catch (e) {
+      if (seq !== previewSeq) return;
+      lastPreviewed = ""; // allow retrying the same link
+      previewHead.textContent = "Preview";
+      previewList.replaceChildren(row("error", e.message || "Couldn't preview that link."));
+    }
+  }
+
+  function renderPreview(d) {
+    const shown = d.items.length;
+    if (d.type === "playlist") {
+      previewHead.textContent = `Playlist — ${d.total} track${d.total === 1 ? "" : "s"} will be added`;
+    } else {
+      previewHead.textContent = "1 track will be added";
+    }
+    previewList.replaceChildren(...d.items.map((it) => row("", it.name || "(untitled)", fmt(it.seconds))));
+    if (d.total > shown) previewList.appendChild(row("loading", `…and ${d.total - shown} more`));
+  }
+
+  sendBtn.addEventListener("click", async () => {
+    const url = urlEl.value.trim();
+    if (!url) { msg.textContent = "Add a link first."; msg.className = "modal-msg err"; return; }
+    msg.textContent = "Sending…"; msg.className = "modal-msg";
+    sendBtn.disabled = true;
+    try {
+      const r = await fetch("/api/suggest", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url, name: nameEl.value, note: noteEl.value }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Something went wrong.");
+      msg.textContent = d.duplicate ? "Already suggested — thanks!" : "Thanks! Suggestion received.";
+      msg.className = "modal-msg ok";
+      closeTimer = setTimeout(close, 1400);
+    } catch (e) {
+      msg.textContent = e.message || "Network error — try again."; msg.className = "modal-msg err";
+    } finally {
+      sendBtn.disabled = false;
+    }
+  });
+
+  // Old /suggest links redirect to /#suggest — open the modal for them.
+  if (location.hash === "#suggest") {
+    history.replaceState(null, "", location.pathname);
+    open();
+  }
+})();
