@@ -16,6 +16,7 @@ public/                     ← everything served to the browser (publish root)
 netlify/functions/          ← HTTP entry points ("controllers"), one per route
   state.js                    GET  /api/state         (public)  what's live now
   suggest.js                  POST /api/suggest       (public)
+  control.js                  POST /api/control       (admin)   skip / play-now
   pool.js                     GET  /api/pool          (admin)   the track pool
   suggestions.js              GET  /api/suggestions   (admin)
   approve.js                  POST /api/approve       (admin)
@@ -98,6 +99,7 @@ from the `queue` so they won't play next.
 |--------|-------------------|-------|------------------------------------------|
 | GET    | /api/state        | none  | current nowPlaying + offset + clock      |
 | POST   | /api/suggest      | none  | store a pending suggestion               |
+| POST   | /api/control      | admin | skip current / play a track now          |
 | GET    | /api/pool         | admin | the full editable track pool             |
 | GET    | /api/suggestions  | admin | list pending suggestions                 |
 | POST   | /api/approve      | admin | expand a suggestion into the pool        |

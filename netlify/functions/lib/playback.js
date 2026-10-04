@@ -144,3 +144,32 @@ export function offsetInto(state, now) {
   if (!state?.nowPlaying) return 0;
   return Math.max(0, now - (state.startedAt || now));
 }
+
+// ---- Live-control mutations (pure) ----
+// These transform state BEFORE advance() runs. They set things up so the very
+// next advance() produces the intended result, rather than duplicating advance's
+// bookkeeping here.
+
+// Skip the current track: mark it finished as of `now` by backdating startedAt
+// so its duration has fully elapsed. The subsequent advance() records it to
+// `recent` and picks the next track normally.
+export function skipCurrent(state, now) {
+  if (!state?.nowPlaying) return state;
+  const dur = state.nowPlaying.seconds > 0 ? state.nowPlaying.seconds : 1;
+  return { ...state, startedAt: now - dur };
+}
+
+// Play a specific track immediately for everyone. The current track (if any) is
+// recorded to `recent` so the repeat-blocker still respects it, then `track`
+// becomes nowPlaying starting at `now`.
+export function playNow(state, track, now, poolSize = 0, limit = DEFAULT_RECENT_LIMIT) {
+  if (!track) return state;
+  let recent = Array.isArray(state?.recent) ? state.recent.slice() : [];
+  if (state?.nowPlaying) recent = recordRecent(recent, state.nowPlaying.id, poolSize, limit);
+  return {
+    nowPlaying: { id: track.id, name: track.name, seconds: track.seconds },
+    startedAt: now,
+    recent,
+    queue: Array.isArray(state?.queue) ? state.queue.slice() : [],
+  };
+}

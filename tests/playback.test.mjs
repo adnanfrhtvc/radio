@@ -1,4 +1,4 @@
-import { advance, pickNext, recordRecent, offsetInto, seededRandom, stateSeed } from "../netlify/functions/lib/playback.js";
+import { advance, pickNext, recordRecent, offsetInto, seededRandom, stateSeed, skipCurrent, playNow } from "../netlify/functions/lib/playback.js";
 let pass=0, fail=0;
 function ok(name, cond){ if(cond){pass++;} else {fail++; console.log("FAIL:", name);} }
 
@@ -77,6 +77,23 @@ ok("zero-dur bootstraps without hang", zs.nowPlaying!==null);
   const r = seededRandom("x"); let inRange = true; for (let k=0;k<1000;k++){ const v=r(); if(v<0||v>=1) inRange=false; }
   ok("seeded values in [0,1)", inRange);
   ok("boot seed stable within a minute", stateSeed({}, 600) === stateSeed({}, 659));
+}
+
+
+// ---- Live controls (PR 2) ----
+{
+  const cpool=[{id:"a",name:"A",seconds:100},{id:"b",name:"B",seconds:100},{id:"c",name:"C",seconds:100}];
+  const first=()=>0;
+  let s = advance({}, cpool, 1000, {randomFn:first});
+  let sk = advance(skipCurrent(s,1030), cpool, 1030, {randomFn:first});
+  ok("skip moves off current", sk.nowPlaying.id!=="a");
+  ok("skip records current in recent", sk.recent[0]==="a");
+  let pn = advance(playNow(s, cpool[2], 1050, cpool.length), cpool, 1050, {randomFn:first});
+  ok("playNow jumps to chosen track", pn.nowPlaying.id==="c");
+  ok("playNow starts at now", pn.startedAt===1050);
+  ok("playNow records previous", pn.recent.includes("a"));
+  let none = skipCurrent({nowPlaying:null}, 5000);
+  ok("skip idle no-op", !none.nowPlaying);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
